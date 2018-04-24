@@ -289,11 +289,20 @@ CREATE OR REPLACE VIEW %(table)s AS
             del vals['other_partner_id']
         if 'type_selection_id' not in vals:
             return vals
-        selection = self.type_selection_id.browse(vals['type_selection_id'])
+        
+         # in most cases type_selection_id is not in the vals....
+        if 'type_selection_id'  in vals:  
+            selection = self.type_selection_id.browse(vals['type_selection_id'])
+            type_id = selection.type_id.id
+            del vals['type_selection_id']
+        else:
+            selection = self.type_selection_id
+            type_id = selection.type_id.id
+        
         type_id = selection.type_id.id
         is_inverse = selection.is_inverse
         vals['type_id'] = type_id
-        del vals['type_selection_id']
+        
         # Need to switch right and left partner if we are in reverse id:
         if 'left_partner_id' in vals or 'right_partner_id' in vals:
             if is_inverse:
@@ -314,9 +323,20 @@ CREATE OR REPLACE VIEW %(table)s AS
     @api.multi
     def write(self, vals):
         """divert non-problematic writes to underlying table"""
-        vals = self._correct_vals(vals)
         for rec in self:
-            rec.relation_id.write(vals)
+            cvals = vals.copy()
+            # need to take the other side of the relation in case we need 
+            # exchanging the side....
+            if 'this_partner_id' in cvals and \
+               'other_partner_id' not in cvals :
+                   cvals['other_partner_id'] = rec.other_partner_id.id
+            elif 'other_partner_id' and 'this_partner_id' not in cvals :
+                   cvals['this_partner_id'] = rec.this_partner_id.id
+            fvals = self._correct_vals(cvals)
+            print "res_partner_relation_all AFTER %s" %fvals
+        
+            rec.relation_id.write(fvals)
+        
         return True
 
     @api.model
